@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Buget zilnic cu report</title>
+<meta name="theme-color" content="#edf1f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1724" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Buget">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #edf1f5;
+    --surface: #ffffff;
+    --ink: #152238;
+    --muted: #55657c;
+    --line: #d5dde7;
+    --accent: #2747c9;
+    --accent-ink: #ffffff;
+    --pos: #137a4b;
+    --neg: #b93815;
+    --tint: #e2e9fb;
+    --display: "Bricolage Grotesque", "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+    --body: "Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1724;
+      --surface: #17212f;
+      --ink: #e7edf6;
+      --muted: #97a6bb;
+      --line: #2a384b;
+      --accent: #86a3ff;
+      --accent-ink: #0f1724;
+      --pos: #4cc38a;
+      --neg: #ff8a65;
+      --tint: #1d2b4a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1724;
+    --surface: #17212f;
+    --ink: #e7edf6;
+    --muted: #97a6bb;
+    --line: #2a384b;
+    --accent: #86a3ff;
+    --accent-ink: #0f1724;
+    --pos: #4cc38a;
+    --neg: #ff8a65;
+    --tint: #1d2b4a;
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.45;
+    -webkit-text-size-adjust: 100%;
+  }
+  main { max-width: 720px; margin: 0 auto; padding: 20px 16px 56px; }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Header */
+  header.top {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    flex-wrap: wrap; margin-bottom: 18px;
+  }
+  h1 {
+    font-family: var(--display); font-weight: 700; font-size: 1.5rem;
+    letter-spacing: -0.02em; margin: 0;
+  }
+  .monthnav { display: flex; align-items: center; gap: 4px; }
+  .monthnav .label { min-width: 9.5rem; text-align: center; font-weight: 600; }
+  .iconbtn {
+    width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--surface); cursor: pointer; font-size: 1.1rem; line-height: 1;
+  }
+  .iconbtn:hover { border-color: var(--accent); }
+
+  /* Setup */
+  .setup {
+    display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field > span { font-size: 0.85rem; color: var(--muted); }
+  .field.total { flex: 1 1 220px; }
+  .field.cur { width: 84px; }
+  .setup input {
+    width: 100%; height: 52px; padding: 0 14px; border-radius: 12px;
+    border: 1.5px solid var(--line); background: var(--surface);
+  }
+  .setup input.big {
+    font-family: var(--display); font-weight: 700; font-size: 1.6rem; letter-spacing: -0.01em;
+  }
+  .setup input:focus { border-color: var(--accent); }
+
+  /* Hero */
+  .hero {
+    background: var(--surface); border-radius: 22px; padding: 22px 20px 0;
+    border: 1px solid var(--line); margin-bottom: 16px; overflow: hidden;
+  }
+  .hero .kicker { color: var(--muted); font-weight: 500; margin: 0 0 2px; }
+  .hero .amount {
+    font-family: var(--display); font-weight: 800; letter-spacing: -0.035em;
+    font-size: clamp(3.4rem, 15vw, 6.2rem); line-height: 1;
+    font-variant-numeric: tabular-nums; margin: 0; word-break: break-word;
+  }
+  .hero .amount small { font-size: 0.32em; font-weight: 600; letter-spacing: 0; margin-left: 0.25em; color: var(--muted); }
+  .hero .amount.pos { color: var(--pos); }
+  .hero .amount.neg { color: var(--neg); }
+  .hero .detail { color: var(--muted); margin: 10px 0 0; max-width: 60ch; }
+  .quick { display: flex; gap: 8px; margin: 18px 0 20px; }
+  .quick input {
+    flex: 1; min-width: 0; height: 48px; padding: 0 14px; border-radius: 12px;
+    border: 1.5px solid var(--line); background: var(--bg);
+  }
+  .quick input:focus { border-color: var(--accent); }
+  .quick button {
+    height: 48px; padding: 0 20px; border-radius: 12px; border: 0; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink); font-weight: 600;
+  }
+  .quick button:hover { filter: brightness(1.08); }
+  .stats {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid var(--line); margin: 0 -20px;
+  }
+  .stats > div { padding: 14px 20px; }
+  .stats > div + div { border-left: 1px solid var(--line); }
+  .stats dt { color: var(--muted); font-size: 0.82rem; margin: 0 0 2px; }
+  .stats dd {
+    margin: 0; font-family: var(--display); font-weight: 700; font-size: 1.2rem;
+    font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+  }
+
+  /* Day list */
+  .list {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+  }
+  .list h2 {
+    font-family: var(--display); font-size: 1.05rem; font-weight: 700; margin: 0;
+    padding: 14px 14px 4px;
+  }
+  .list p.note { margin: 0; padding: 0 14px 12px; color: var(--muted); font-size: 0.92rem; }
+  .row {
+    display: grid; grid-template-columns: 3.4rem minmax(0, 1fr) minmax(5.5rem, 7rem) minmax(0, 1fr);
+    align-items: center; gap: 8px; padding: 8px 14px; border-top: 1px solid var(--line);
+    position: relative;
+  }
+  .row.head {
+    font-size: 0.8rem; color: var(--muted); padding-top: 8px; padding-bottom: 8px;
+    background: var(--bg);
+  }
+  .row .day { display: flex; flex-direction: column; line-height: 1.15; }
+  .row .day b { font-family: var(--display); font-size: 1.1rem; }
+  .row .day span { font-size: 0.78rem; color: var(--muted); }
+  .row .val { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .row .sub { font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .row input {
+    width: 100%; height: 40px; padding: 0 10px; border-radius: 9px; text-align: right;
+    border: 1.5px solid var(--line); background: var(--bg); font-variant-numeric: tabular-nums;
+  }
+  .row input:focus { border-color: var(--accent); }
+  .row .end { text-align: right; }
+  .row .end.pos { color: var(--pos); }
+  .row .end.neg { color: var(--neg); }
+  .row.head .end { color: var(--muted); }
+  .row.today { background: var(--tint); }
+  .row.today::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--accent);
+  }
+  .row.today .day span { color: var(--accent); font-weight: 600; }
+  .row.future { opacity: 0.62; }
+  .row.future:focus-within, .row.future:hover { opacity: 1; }
+
+  .foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+  .foot p { margin: 0; color: var(--muted); font-size: 0.88rem; max-width: 46ch; }
+  .link {
+    background: none; border: 0; padding: 6px 0; cursor: pointer; color: var(--muted);
+    text-decoration: underline; text-underline-offset: 3px;
+  }
+  .link.armed { color: var(--neg); font-weight: 600; }
+  .hidden { display: none !important; }
+
+  @media (max-width: 420px) {
+    .stats > div { padding: 12px 10px; }
+    .stats > div:first-child { padding-left: 20px; }
+    .stats dd { font-size: 1.02rem; }
+    .row { grid-template-columns: 2.9rem minmax(0, 1fr) 5.5rem minmax(0, 0.9fr); gap: 6px; padding: 8px 10px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .hero .amount { transition: color 0.2s; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <h1>Buget zilnic</h1>
+    <div class="monthnav" role="group" aria-label="Alege luna">
+      <button class="iconbtn" id="prev" aria-label="Luna anterioară">‹</button>
+      <div class="label" id="monthLabel" aria-live="polite"></div>
+      <button class="iconbtn" id="next" aria-label="Luna următoare">›</button>
+    </div>
+  </header>
+
+  <section class="setup" aria-label="Setări lună">
+    <label class="field total">
+      <span>Suma totală preconizată pentru lună</span>
+      <input id="total" class="big" type="text" inputmode="decimal" placeholder="ex. 6000" autocomplete="off">
+    </label>
+    <label class="field cur">
+      <span>Monedă</span>
+      <input id="currency" type="text" maxlength="5" autocomplete="off">
+    </label>
+  </section>
+
+  <section class="hero" aria-label="Rezumat">
+    <p class="kicker" id="kicker"></p>
+    <p class="amount" id="amount"></p>
+    <p class="detail" id="detail"></p>
+    <div class="quick" id="quick">
+      <input id="quickAmount" type="text" inputmode="decimal" placeholder="Cât ai cheltuit acum?" autocomplete="off" aria-label="Suma cheltuită acum">
+      <button id="quickBtn" type="button">Adaugă la azi</button>
+    </div>
+    <dl class="stats">
+      <div><dt>Cheltuit în lună</dt><dd id="sSpent"></dd></div>
+      <div><dt>Rămas în lună</dt><dd id="sLeft"></dd></div>
+      <div><dt>Buget de bază pe zi</dt><dd id="sBase"></dd></div>
+    </dl>
+  </section>
+
+  <section class="list" aria-label="Zilele lunii">
+    <h2>Zilele lunii</h2>
+    <p class="note">Ce nu cheltui într-o zi se adaugă automat în ziua următoare. Dacă depășești, diferența se scade din zilele următoare.</p>
+    <div class="row head" aria-hidden="true">
+      <div>Zi</div><div>Disponibil</div><div style="text-align:right">Cheltuit</div><div class="end">Rămas</div>
+    </div>
+    <div id="rows"></div>
+  </section>
+
+  <div class="foot">
+    <p>Datele se salvează în acest browser, pe acest dispozitiv.</p>
+    <button class="link" id="reset" type="button">Șterge cheltuielile din luna asta</button>
+  </div>
+</main>
+
+<script>
+(function () {
+  var KEY = 'buget-zilnic-v1';
+  var MONTHS = ['ianuarie','februarie','martie','aprilie','mai','iunie','iulie','august','septembrie','octombrie','noiembrie','decembrie'];
+  var WEEKDAYS = ['Du','Lu','Ma','Mi','Jo','Vi','Sâ'];
+
+  var store = { currency: 'lei', months: {} };
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (raw) {
+      var p = JSON.parse(raw);
+      if (p && typeof p === 'object') {
+        if (typeof p.currency === 'string' && p.currency) store.currency = p.currency;
+        if (p.months && typeof p.months === 'object') store.months = p.months;
+      }
+    }
+  } catch (e) {}
+
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} }
+  function ym(y, m) { return y + '-' + String(m).padStart(2, '0'); }
+
+  var now = new Date();
+  var todayKey = ym(now.getFullYear(), now.getMonth() + 1);
+  var todayNum = now.getDate();
+  var viewKey = todayKey;
+  var N = 30;
+  var rowEls = [];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var el = {
+    prev: $('prev'), next: $('next'), monthLabel: $('monthLabel'),
+    total: $('total'), currency: $('currency'),
+    kicker: $('kicker'), amount: $('amount'), detail: $('detail'),
+    quick: $('quick'), quickAmount: $('quickAmount'), quickBtn: $('quickBtn'),
+    sSpent: $('sSpent'), sLeft: $('sLeft'), sBase: $('sBase'),
+    rows: $('rows'), reset: $('reset')
+  };
+
+  function parseNum(s) {
+    var n = parseFloat(String(s).replace(/\s/g, '').replace(',', '.'));
+    return isFinite(n) && n >= 0 ? n : 0;
+  }
+  function round2(n) { return Math.round(n * 100) / 100; }
+  function fmt(n) {
+    if (Math.abs(n) < 0.005) n = 0;
+    return n.toLocaleString('ro-RO', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
+  function getMonth(key) {
+    if (!store.months[key]) {
+      var prevTotal = 0;
+      Object.keys(store.months).sort().forEach(function (k) {
+        if (k < key && store.months[k].total > 0) prevTotal = store.months[k].total;
+      });
+      store.months[key] = { total: prevTotal, spent: {} };
+    }
+    var m = store.months[key];
+    if (!m.spent || typeof m.spent !== 'object') m.spent = {};
+    if (typeof m.total !== 'number') m.total = 0;
+    return m;
+  }
+
+  function compute() {
+    var m = getMonth(viewKey);
+    var base = m.total / N;
+    var rows = [], carry = 0, spentSum = 0;
+    for (var d = 1; d <= N; d++) {
+      var avail = carry + base;
+      var spent = m.spent[d] || 0;
+      var end = avail - spent;
+      rows.push({ d: d, carryIn: carry, avail: avail, spent: spent, end: end });
+      spentSum += spent;
+      carry = end;
+    }
+    return { m: m, base: base, rows: rows, spentSum: spentSum };
+  }
+
+  function build() {
+    var parts = viewKey.split('-').map(Number);
+    var y = parts[0], mo = parts[1];
+    N = new Date(y, mo, 0).getDate();
+    el.monthLabel.textContent = MONTHS[mo - 1] + ' ' + y;
+    var m = getMonth(viewKey);
+    el.total.value = m.total ? String(m.total).replace('.', ',') : '';
+    el.currency.value = store.currency;
+    el.rows.innerHTML = '';
+    rowEls = [];
+    var isCur = viewKey === todayKey, isFuture = viewKey > todayKey;
+
+    for (var d = 1; d <= N; d++) {
+      var row = document.createElement('div');
+      row.className = 'row';
+      if (isCur && d === todayNum) row.classList.add('today');
+      if (isFuture || (isCur && d > todayNum)) row.classList.add('future');
+      var wd = WEEKDAYS[new Date(y, mo - 1, d).getDay()];
+      var dayLabel = (isCur && d === todayNum) ? 'azi' : wd;
+      row.innerHTML =
+        '<div class="day"><b>' + d + '</b><span>' + dayLabel + '</span></div>' +
+        '<div><div class="val" data-avail></div><div class="sub" data-carry></div></div>' +
+        '<div><input type="text" inputmode="decimal" autocomplete="off" aria-label="Cheltuit în ziua ' + d + '" data-day="' + d + '"></div>' +
+        '<div class="end val" data-end></div>';
+      var input = row.querySelector('input');
+      if (m.spent[d]) input.value = String(m.spent[d]).replace('.', ',');
+      input.addEventListener('input', onSpentInput);
+      el.rows.appendChild(row);
+      rowEls.push({
+        row: row, avail: row.querySelector('[data-avail]'),
+        carry: row.querySelector('[data-carry]'), end: row.querySelector('[data-end]'), input: input
+      });
+    }
+    update();
+  }
+
+  function update() {
+    var c = compute();
+    var cur = store.currency;
+    var isCur = viewKey === todayKey;
+
+    c.rows.forEach(function (r, i) {
+      var e = rowEls[i];
+      e.avail.textContent = fmt(r.avail);
+      if (Math.abs(r.carryIn) < 0.005) e.carry.textContent = '';
+      else if (r.carryIn > 0) e.carry.textContent = 'din care report ' + fmt(r.carryIn);
+      else e.carry.textContent = 'depășire anterioară ' + fmt(r.carryIn);
+      e.end.textContent = fmt(r.end);
+      e.end.classList.toggle('pos', r.end >= 0);
+      e.end.classList.toggle('neg', r.end < 0);
+    });
+
+    el.sSpent.textContent = fmt(c.spentSum) + ' ' + cur;
+    el.sLeft.textContent = fmt(c.m.total - c.spentSum) + ' ' + cur;
+    el.sBase.textContent = fmt(c.base) + ' ' + cur;
+
+    el.quick.classList.toggle('hidden', !isCur);
+    el.amount.classList.remove('pos', 'neg');
+
+    if (c.m.total <= 0) {
+      el.kicker.textContent = 'Începe cu bugetul lunii';
+      el.amount.textContent = '—';
+      el.detail.textContent = 'Scrie suma totală de mai sus și vezi cât poți cheltui în fiecare zi.';
+      return;
+    }
+
+    if (isCur) {
+      var r = c.rows[todayNum - 1];
+      el.kicker.textContent = r.end >= 0 ? 'Mai poți cheltui azi' : 'Ai depășit bugetul de azi cu';
+      el.amount.innerHTML = fmt(Math.abs(r.end)) + '<small>' + escapeHtml(cur) + '</small>';
+      el.amount.classList.add(r.end >= 0 ? 'pos' : 'neg');
+      var txt = fmt(c.base) + ' buget de bază';
+      if (r.carryIn > 0.005) txt += ' + ' + fmt(r.carryIn) + ' report din zilele trecute';
+      else if (r.carryIn < -0.005) txt += ' − ' + fmt(-r.carryIn) + ' depășiri din zilele trecute';
+      if (r.spent > 0) txt += ' − ' + fmt(r.spent) + ' cheltuit azi';
+      el.detail.textContent = txt + '.';
+    } else {
+      var left = c.m.total - c.spentSum;
+      el.kicker.textContent = left >= 0 ? 'Rămas din bugetul lunii' : 'Buget depășit cu';
+      el.amount.innerHTML = fmt(Math.abs(left)) + '<small>' + escapeHtml(cur) + '</small>';
+      el.amount.classList.add(left >= 0 ? 'pos' : 'neg');
+      el.detail.textContent = 'Buget de bază: ' + fmt(c.base) + ' ' + cur + ' pe zi.';
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+    });
+  }
+
+  function onSpentInput(ev) {
+    var d = ev.target.getAttribute('data-day');
+    var m = getMonth(viewKey);
+    var v = parseNum(ev.target.value);
+    if (v > 0) m.spent[d] = v; else delete m.spent[d];
+    save(); update();
+  }
+
+  el.total.addEventListener('input', function () {
+    getMonth(viewKey).total = parseNum(el.total.value);
+    save(); update();
+  });
+  el.currency.addEventListener('input', function () {
+    store.currency = el.currency.value.trim().slice(0, 5) || 'lei';
+    save(); update();
+  });
+
+  function quickAdd() {
+    var v = parseNum(el.quickAmount.value);
+    if (v <= 0) { el.quickAmount.focus(); return; }
+    var m = getMonth(viewKey);
+    m.spent[todayNum] = round2((m.spent[todayNum] || 0) + v);
+    rowEls[todayNum - 1].input.value = String(m.spent[todayNum]).replace('.', ',');
+    el.quickAmount.value = '';
+    save(); update();
+    el.quickAmount.focus();
+  }
+  el.quickBtn.addEventListener('click', quickAdd);
+  el.quickAmount.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); quickAdd(); } });
+
+  function shift(delta) {
+    var p = viewKey.split('-').map(Number);
+    var d = new Date(p[0], p[1] - 1 + delta, 1);
+    viewKey = ym(d.getFullYear(), d.getMonth() + 1);
+    disarm();
+    build();
+  }
+  el.prev.addEventListener('click', function () { shift(-1); });
+  el.next.addEventListener('click', function () { shift(1); });
+
+  var armTimer = null;
+  function disarm() {
+    clearTimeout(armTimer);
+    el.reset.classList.remove('armed');
+    el.reset.textContent = 'Șterge cheltuielile din luna asta';
+  }
+  el.reset.addEventListener('click', function () {
+    if (!el.reset.classList.contains('armed')) {
+      el.reset.classList.add('armed');
+      el.reset.textContent = 'Sigur? Apasă încă o dată';
+      armTimer = setTimeout(disarm, 4000);
+      return;
+    }
+    getMonth(viewKey).spent = {};
+    save(); disarm(); build();
+  });
+
+  build();
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    });
+  }
+})();
+</script>
+</body>
+</html>
