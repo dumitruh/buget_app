@@ -16,6 +16,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
 <style>
   :root {
     --bg: #edf1f5;
@@ -187,8 +190,15 @@
   .row.future { opacity: 0.62; }
   .row.future:focus-within, .row.future:hover { opacity: 1; }
 
-  .foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+  .foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 14px; align-items: baseline; }
   .foot p { margin: 0; color: var(--muted); font-size: 0.88rem; max-width: 46ch; }
+  .syncstatus { display: inline-flex; align-items: center; gap: 6px; }
+  .syncstatus::before {
+    content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none;
+  }
+  .syncstatus.ok::before { background: var(--pos); }
+  .syncstatus.warn::before { background: #c98a12; }
+  .syncstatus.err::before { background: var(--neg); }
   .link {
     background: none; border: 0; padding: 6px 0; cursor: pointer; color: var(--muted);
     text-decoration: underline; text-underline-offset: 3px;
@@ -254,7 +264,7 @@
   </section>
 
   <div class="foot">
-    <p>Datele se salvează în acest browser, pe acest dispozitiv.</p>
+    <p id="footNote">Datele se salvează în acest browser, pe acest dispozitiv.</p>
     <button class="link" id="reset" type="button">Șterge cheltuielile din luna asta</button>
   </div>
 </main>
@@ -264,6 +274,23 @@
   var KEY = 'buget-zilnic-v1';
   var MONTHS = ['ianuarie','februarie','martie','aprilie','mai','iunie','iulie','august','septembrie','octombrie','noiembrie','decembrie'];
   var WEEKDAYS = ['Du','Lu','Ma','Mi','Jo','Vi','Sâ'];
+
+  // ====== SINCRONIZARE ÎNTRE TELEFOANE (opțional) ======
+  // Ca tu și soția să vedeți aceleași date, completează aici cu valorile din
+  // proiectul vostru Firebase și pune enabled: true. Codul de cameră poate fi
+  // orice text, la fel pe ambele telefoane (de ex. numele vostru de familie).
+  var SYNC = {
+    enabled: true,
+    room: 'hadirca',
+    firebaseConfig: {
+      apiKey: 'AIzaSyD0Z0XeO-nyj7M-J1F4yZXzVIjvblQQ4TI',
+      authDomain: 'buget-b623f.firebaseapp.com',
+      databaseURL: 'https://buget-b623f-default-rtdb.europe-west1.firebasedatabase.app',
+      projectId: 'buget-b623f',
+      appId: '1:1021813855262:web:19aef695a5aea6240b0a0f'
+    }
+  };
+  // ====== sfârșitul zonei de configurare ======
 
   var store = { currency: 'lei', months: {} };
   try {
@@ -277,8 +304,18 @@
     }
   } catch (e) {}
 
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} }
+  function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} }
+  function save() { saveLocal(); schedulePush(); }
   function ym(y, m) { return y + '-' + String(m).padStart(2, '0'); }
+
+  var deviceId = (function () {
+    try {
+      var k = 'buget-zilnic-device';
+      var v = localStorage.getItem(k);
+      if (!v) { v = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem(k, v); }
+      return v;
+    } catch (e) { return 'd' + Date.now(); }
+  })();
 
   var now = new Date();
   var todayKey = ym(now.getFullYear(), now.getMonth() + 1);
@@ -294,8 +331,77 @@
     kicker: $('kicker'), amount: $('amount'), detail: $('detail'),
     quick: $('quick'), quickAmount: $('quickAmount'), quickBtn: $('quickBtn'),
     sSpent: $('sSpent'), sLeft: $('sLeft'), sBase: $('sBase'),
-    rows: $('rows'), reset: $('reset')
+    rows: $('rows'), reset: $('reset'), footNote: $('footNote')
   };
+
+  // ---- Sincronizare: stare și funcții ----
+  var syncRef = null, syncAuthed = false, applyingRemote = false, pushTimer = null;
+  var lastSyncedAt = 0;
+  var syncStatusEl = null;
+
+  function ensureSyncStatusEl() {
+    if (syncStatusEl || !el.footNote) return;
+    syncStatusEl = document.createElement('span');
+    syncStatusEl.className = 'syncstatus';
+    el.footNote.parentNode.insertBefore(syncStatusEl, el.footNote);
+    el.footNote.remove();
+  }
+  function setSyncStatus(text, cls) {
+    ensureSyncStatusEl();
+    if (!syncStatusEl) return;
+    syncStatusEl.textContent = text;
+    syncStatusEl.className = 'syncstatus ' + (cls || '');
+  }
+
+  function schedulePush() {
+    if (!SYNC.enabled || !syncRef || applyingRemote) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(function () {
+      lastSyncedAt = Date.now();
+      syncRef.set({ data: store, updatedAt: lastSyncedAt, device: deviceId })
+        .then(function () { setSyncStatus('Sincronizat', 'ok'); })
+        .catch(function () { setSyncStatus('Nesincronizat — verifică internetul', 'err'); });
+    }, 700);
+  }
+
+  function initSync() {
+    if (!SYNC.enabled) return;
+    if (typeof firebase === 'undefined') { setSyncStatus('Sincronizare indisponibilă (fără internet)', 'warn'); return; }
+    if (!SYNC.firebaseConfig.apiKey || !SYNC.firebaseConfig.databaseURL) { setSyncStatus('Sincronizare neconfigurată', 'warn'); return; }
+    setSyncStatus('Se conectează…', 'warn');
+    try { firebase.initializeApp(SYNC.firebaseConfig); } catch (e) {}
+    firebase.auth().onAuthStateChanged(function (user) {
+      if (!user) return;
+      syncAuthed = true;
+      var ref = firebase.database().ref('budgets/' + encodeURIComponent(SYNC.room));
+      syncRef = ref;
+      ref.on('value', function (snap) {
+        var remote = snap.val();
+        if (!remote || typeof remote !== 'object' || !remote.data) {
+          // Camera e goală — urcăm ce avem local.
+          schedulePush();
+          setSyncStatus('Sincronizat', 'ok');
+          return;
+        }
+        if (remote.device !== deviceId && (remote.updatedAt || 0) > lastSyncedAt) {
+          applyingRemote = true;
+          try {
+            if (typeof remote.data.currency === 'string' && remote.data.currency) store.currency = remote.data.currency;
+            if (remote.data.months && typeof remote.data.months === 'object') store.months = remote.data.months;
+            saveLocal();
+            lastSyncedAt = remote.updatedAt || Date.now();
+            build();
+          } finally { applyingRemote = false; }
+        }
+        setSyncStatus('Sincronizat', 'ok');
+      }, function () {
+        setSyncStatus('Sincronizare eșuată — verifică regulile Firebase', 'err');
+      });
+    });
+    firebase.auth().signInAnonymously().catch(function () {
+      setSyncStatus('Conectare eșuată', 'err');
+    });
+  }
 
   function parseNum(s) {
     var n = parseFloat(String(s).replace(/\s/g, '').replace(',', '.'));
@@ -485,6 +591,11 @@
   });
 
   build();
+
+  if (SYNC.enabled) {
+    ensureSyncStatusEl();
+    initSync();
+  }
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
