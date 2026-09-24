@@ -19,6 +19,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg: #edf1f5;
@@ -95,6 +96,15 @@
   }
   .iconbtn:hover { border-color: var(--accent); }
 
+  /* Tabs */
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+  .tab {
+    border: 0; background: none; cursor: pointer; padding: 10px 4px; margin-bottom: -1px;
+    color: var(--muted); font-weight: 600; font-size: 0.95rem; border-bottom: 2px solid transparent;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab + .tab { margin-left: 10px; }
+
   /* Setup */
   .setup {
     display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
@@ -111,6 +121,11 @@
     font-family: var(--display); font-weight: 700; font-size: 1.6rem; letter-spacing: -0.01em;
   }
   .setup input:focus { border-color: var(--accent); }
+  .setup select {
+    width: 100%; height: 52px; padding: 0 14px; border-radius: 12px;
+    border: 1.5px solid var(--line); background: var(--surface); appearance: auto;
+  }
+  .setup select:focus { border-color: var(--accent); }
 
   /* Hero */
   .hero {
@@ -190,6 +205,48 @@
   .row.future { opacity: 0.62; }
   .row.future:focus-within, .row.future:hover { opacity: 1; }
 
+  /* Bills list */
+  .billshero .stats { border-top: 0; margin: 0 -20px; }
+  .billrow {
+    display: grid; grid-template-columns: minmax(0, 1fr) 6.5rem 5rem 2.2rem;
+    align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line);
+  }
+  .billrow .name { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+  .billrow .name b { font-weight: 600; overflow-wrap: anywhere; }
+  .billrow .name span { font-size: 0.76rem; color: var(--muted); }
+  .billrow input[type="text"] {
+    width: 100%; height: 38px; padding: 0 10px; border-radius: 9px; text-align: right;
+    border: 1.5px solid var(--line); background: var(--bg); font-variant-numeric: tabular-nums;
+  }
+  .billrow input[type="text"]:focus { border-color: var(--accent); }
+  .billrow .paidwrap { display: flex; justify-content: center; align-items: center; gap: 6px; }
+  .billrow input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--pos); cursor: pointer; }
+  .billrow .del {
+    width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface);
+    color: var(--muted); cursor: pointer; font-size: 1rem; line-height: 1;
+  }
+  .billrow .del:hover { border-color: var(--neg); color: var(--neg); }
+  .billrow.paid .name b { text-decoration: line-through; color: var(--muted); }
+  .billsempty { padding: 20px 14px; color: var(--muted); font-size: 0.92rem; }
+  .addbill {
+    display: grid; grid-template-columns: minmax(0, 1fr) 8.5rem 6.5rem auto; gap: 8px;
+    padding: 12px 14px; border-top: 1px solid var(--line); background: var(--bg);
+  }
+  .addbill input, .addbill select {
+    height: 42px; padding: 0 10px; border-radius: 9px; border: 1.5px solid var(--line); background: var(--surface);
+  }
+  .addbill input:focus, .addbill select:focus { border-color: var(--accent); }
+  .addbill button {
+    height: 42px; padding: 0 16px; border-radius: 9px; border: 0; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink); font-weight: 600; white-space: nowrap;
+  }
+  .addbill button:hover { filter: brightness(1.08); }
+
+  @media (max-width: 480px) {
+    .billrow { grid-template-columns: minmax(0, 1fr) 5.2rem 3.6rem 2rem; gap: 6px; padding: 8px 10px; }
+    .addbill { grid-template-columns: 1fr 1fr; }
+  }
+
   .foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 14px; align-items: baseline; }
   .foot p { margin: 0; color: var(--muted); font-size: 0.88rem; max-width: 46ch; }
   .syncstatus { display: inline-flex; align-items: center; gap: 6px; }
@@ -220,7 +277,7 @@
 <body>
 <main>
   <header class="top">
-    <h1>Buget zilnic</h1>
+    <h1 id="pageTitle">Buget zilnic</h1>
     <div class="monthnav" role="group" aria-label="Alege luna">
       <button class="iconbtn" id="prev" aria-label="Luna anterioară">‹</button>
       <div class="label" id="monthLabel" aria-live="polite"></div>
@@ -228,44 +285,96 @@
     </div>
   </header>
 
-  <section class="setup" aria-label="Setări lună">
-    <label class="field total">
-      <span>Suma totală preconizată pentru lună</span>
-      <input id="total" class="big" type="text" inputmode="decimal" placeholder="ex. 6000" autocomplete="off">
-    </label>
-    <label class="field cur">
-      <span>Monedă</span>
-      <input id="currency" type="text" maxlength="5" autocomplete="off">
-    </label>
+  <nav class="tabs" role="tablist" aria-label="Secțiuni">
+    <button class="tab active" id="tabDaily" role="tab" aria-selected="true" type="button">Buget zilnic</button>
+    <button class="tab" id="tabBills" role="tab" aria-selected="false" type="button">Cheltuieli lunare</button>
+  </nav>
+
+  <section id="pageDaily">
+    <section class="setup" aria-label="Setări lună">
+      <label class="field total">
+        <span>Suma totală preconizată pentru lună</span>
+        <input id="total" class="big" type="text" inputmode="decimal" placeholder="ex. 6000" autocomplete="off">
+      </label>
+      <label class="field cur">
+        <span>Monedă</span>
+        <input id="currency" type="text" maxlength="5" autocomplete="off">
+      </label>
+    </section>
+
+    <section class="hero" aria-label="Rezumat">
+      <p class="kicker" id="kicker"></p>
+      <p class="amount" id="amount"></p>
+      <p class="detail" id="detail"></p>
+      <div class="quick" id="quick">
+        <input id="quickAmount" type="text" inputmode="decimal" placeholder="Cât ai cheltuit acum?" autocomplete="off" aria-label="Suma cheltuită acum">
+        <button id="quickBtn" type="button">Adaugă la azi</button>
+      </div>
+      <dl class="stats">
+        <div><dt>Cheltuit în lună</dt><dd id="sSpent"></dd></div>
+        <div><dt>Rămas în lună</dt><dd id="sLeft"></dd></div>
+        <div><dt>Buget de bază pe zi</dt><dd id="sBase"></dd></div>
+      </dl>
+    </section>
+
+    <section class="list" aria-label="Zilele lunii">
+      <h2>Zilele lunii</h2>
+      <p class="note">Ce nu cheltui într-o zi se adaugă automat în ziua următoare. Dacă depășești, diferența se scade din zilele următoare.</p>
+      <div class="row head" aria-hidden="true">
+        <div>Zi</div><div>Disponibil</div><div style="text-align:right">Cheltuit</div><div class="end">Rămas</div>
+      </div>
+      <div id="rows"></div>
+    </section>
   </section>
 
-  <section class="hero" aria-label="Rezumat">
-    <p class="kicker" id="kicker"></p>
-    <p class="amount" id="amount"></p>
-    <p class="detail" id="detail"></p>
-    <div class="quick" id="quick">
-      <input id="quickAmount" type="text" inputmode="decimal" placeholder="Cât ai cheltuit acum?" autocomplete="off" aria-label="Suma cheltuită acum">
-      <button id="quickBtn" type="button">Adaugă la azi</button>
-    </div>
-    <dl class="stats">
-      <div><dt>Cheltuit în lună</dt><dd id="sSpent"></dd></div>
-      <div><dt>Rămas în lună</dt><dd id="sLeft"></dd></div>
-      <div><dt>Buget de bază pe zi</dt><dd id="sBase"></dd></div>
-    </dl>
-  </section>
+  <section id="pageBills" class="hidden">
+    <section class="setup" aria-label="Venit lunar">
+      <label class="field total">
+        <span>Venit total lunar</span>
+        <input id="income" class="big" type="text" inputmode="decimal" placeholder="ex. 8000" autocomplete="off">
+      </label>
+      <label class="field" style="width: 190px;">
+        <span>Categorie</span>
+        <select id="billsFilter">
+          <option value="toate">Toate</option>
+          <option value="utilitati">Utilități</option>
+          <option value="credite">Credite</option>
+          <option value="altele">Altele</option>
+        </select>
+      </label>
+    </section>
 
-  <section class="list" aria-label="Zilele lunii">
-    <h2>Zilele lunii</h2>
-    <p class="note">Ce nu cheltui într-o zi se adaugă automat în ziua următoare. Dacă depășești, diferența se scade din zilele următoare.</p>
-    <div class="row head" aria-hidden="true">
-      <div>Zi</div><div>Disponibil</div><div style="text-align:right">Cheltuit</div><div class="end">Rămas</div>
-    </div>
-    <div id="rows"></div>
+    <section class="hero billshero" aria-label="Rezumat cheltuieli lunare">
+      <dl class="stats">
+        <div><dt>Venit lunar</dt><dd id="bIncome"></dd></div>
+        <div><dt>Total cheltuieli</dt><dd id="bTotal"></dd></div>
+        <div><dt>Rămas din venit</dt><dd id="bLeft"></dd></div>
+      </dl>
+    </section>
+
+    <section class="list" aria-label="Cheltuieli recurente">
+      <h2>Cheltuieli recurente</h2>
+      <p class="note">Aceste cheltuieli rămân aceleași în fiecare lună. Suma sau bifa „achitat” se pot schimba pentru luna curentă fără să afecteze celelalte luni.</p>
+      <div id="billsList"></div>
+      <div class="addbill">
+        <input id="billName" type="text" placeholder="Denumire (ex. Chirie)" autocomplete="off">
+        <select id="billGroup">
+          <option value="utilitati">Utilități</option>
+          <option value="credite">Credite</option>
+          <option value="altele">Altele</option>
+        </select>
+        <input id="billAmount" type="text" inputmode="decimal" placeholder="Sumă" autocomplete="off">
+        <button id="billAdd" type="button">Adaugă</button>
+      </div>
+    </section>
   </section>
 
   <div class="foot">
     <p id="footNote">Datele se salvează în acest browser, pe acest dispozitiv.</p>
-    <button class="link" id="reset" type="button">Șterge cheltuielile din luna asta</button>
+    <div style="display:flex; gap:16px; align-items:baseline; flex-wrap:wrap;">
+      <button class="link" id="exportXlsx" type="button">Exportă în Excel</button>
+      <button class="link" id="reset" type="button">Șterge cheltuielile din luna asta</button>
+    </div>
   </div>
 </main>
 
@@ -292,7 +401,7 @@
   };
   // ====== sfârșitul zonei de configurare ======
 
-  var store = { currency: 'lei', months: {} };
+  var store = { currency: 'lei', months: {}, billsTemplate: null };
   try {
     var raw = localStorage.getItem(KEY);
     if (raw) {
@@ -300,13 +409,27 @@
       if (p && typeof p === 'object') {
         if (typeof p.currency === 'string' && p.currency) store.currency = p.currency;
         if (p.months && typeof p.months === 'object') store.months = p.months;
+        if (Array.isArray(p.billsTemplate)) store.billsTemplate = p.billsTemplate;
       }
     }
   } catch (e) {}
+  if (!Array.isArray(store.billsTemplate)) {
+    // Primă folosire a paginii „Cheltuieli lunare” — pornim cu câteva categorii uzuale,
+    // pe care le poți edita sau șterge oricând.
+    store.billsTemplate = [
+      { id: 'b_chirie', name: 'Chirie', group: 'utilitati', amount: 0 },
+      { id: 'b_curent', name: 'Curent + TV + Internet', group: 'utilitati', amount: 0 },
+      { id: 'b_gaz', name: 'Gaz', group: 'utilitati', amount: 0 },
+      { id: 'b_asoc', name: 'Asociație (întreținere)', group: 'utilitati', amount: 0 },
+      { id: 'b_ipotecar', name: 'Credit ipotecar', group: 'credite', amount: 0 },
+      { id: 'b_consum', name: 'Credit de consum', group: 'credite', amount: 0 }
+    ];
+  }
 
   function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} }
   function save() { saveLocal(); schedulePush(); }
   function ym(y, m) { return y + '-' + String(m).padStart(2, '0'); }
+  function newId() { return 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
   var deviceId = (function () {
     try {
@@ -326,12 +449,15 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var el = {
-    prev: $('prev'), next: $('next'), monthLabel: $('monthLabel'),
+    prev: $('prev'), next: $('next'), monthLabel: $('monthLabel'), pageTitle: $('pageTitle'),
+    tabDaily: $('tabDaily'), tabBills: $('tabBills'), pageDaily: $('pageDaily'), pageBills: $('pageBills'),
     total: $('total'), currency: $('currency'),
     kicker: $('kicker'), amount: $('amount'), detail: $('detail'),
     quick: $('quick'), quickAmount: $('quickAmount'), quickBtn: $('quickBtn'),
     sSpent: $('sSpent'), sLeft: $('sLeft'), sBase: $('sBase'),
-    rows: $('rows'), reset: $('reset'), footNote: $('footNote')
+    rows: $('rows'), reset: $('reset'), footNote: $('footNote'), exportXlsx: $('exportXlsx'),
+    income: $('income'), billsFilter: $('billsFilter'), bIncome: $('bIncome'), bTotal: $('bTotal'), bLeft: $('bLeft'),
+    billsList: $('billsList'), billName: $('billName'), billGroup: $('billGroup'), billAmount: $('billAmount'), billAdd: $('billAdd')
   };
 
   // ---- Sincronizare: stare și funcții ----
@@ -388,9 +514,11 @@
           try {
             if (typeof remote.data.currency === 'string' && remote.data.currency) store.currency = remote.data.currency;
             if (remote.data.months && typeof remote.data.months === 'object') store.months = remote.data.months;
+            if (Array.isArray(remote.data.billsTemplate)) store.billsTemplate = remote.data.billsTemplate;
             saveLocal();
             lastSyncedAt = remote.updatedAt || Date.now();
             build();
+            if (!el.pageBills.classList.contains('hidden')) buildBills();
           } finally { applyingRemote = false; }
         }
         setSyncStatus('Sincronizat', 'ok');
@@ -419,11 +547,13 @@
       Object.keys(store.months).sort().forEach(function (k) {
         if (k < key && store.months[k].total > 0) prevTotal = store.months[k].total;
       });
-      store.months[key] = { total: prevTotal, spent: {} };
+      store.months[key] = { total: prevTotal, spent: {}, income: 0, bills: {} };
     }
     var m = store.months[key];
     if (!m.spent || typeof m.spent !== 'object') m.spent = {};
     if (typeof m.total !== 'number') m.total = 0;
+    if (typeof m.income !== 'number') m.income = 0;
+    if (!m.bills || typeof m.bills !== 'object') m.bills = {};
     return m;
   }
 
@@ -440,6 +570,197 @@
       carry = end;
     }
     return { m: m, base: base, rows: rows, spentSum: spentSum };
+  }
+
+  function computeMonthRows(key) {
+    var parts = key.split('-').map(Number);
+    var y = parts[0], mo = parts[1];
+    var days = new Date(y, mo, 0).getDate();
+    var m = store.months[key] || { total: 0, spent: {} };
+    var total = m.total || 0;
+    var base = total / days;
+    var rows = [], carry = 0, spentSum = 0;
+    for (var d = 1; d <= days; d++) {
+      var avail = carry + base;
+      var spent = m.spent[d] || 0;
+      var end = avail - spent;
+      rows.push({ d: d, avail: avail, spent: spent, end: end });
+      spentSum += spent;
+      carry = end;
+    }
+    return { total: total, base: base, rows: rows, spentSum: spentSum, days: days, y: y, mo: mo };
+  }
+
+  var GROUP_LABEL = { utilitati: 'Utilități', credite: 'Credite', altele: 'Altele' };
+
+  function billValue(key, item) {
+    var m = getMonth(key);
+    var ov = m.bills[item.id];
+    return {
+      amount: (ov && typeof ov.amount === 'number') ? ov.amount : item.amount,
+      paid: !!(ov && ov.paid)
+    };
+  }
+
+  function buildBills() {
+    var filter = el.billsFilter.value;
+    var m = getMonth(viewKey);
+    el.income.value = m.income ? String(m.income).replace('.', ',') : '';
+    el.billsList.innerHTML = '';
+    var items = store.billsTemplate.filter(function (it) { return filter === 'toate' || it.group === filter; });
+    if (!items.length) {
+      var empty = document.createElement('p');
+      empty.className = 'billsempty';
+      empty.textContent = 'Nu ai încă nicio cheltuială în această categorie.';
+      el.billsList.appendChild(empty);
+    }
+    items.forEach(function (item) {
+      var v = billValue(viewKey, item);
+      var row = document.createElement('div');
+      row.className = 'billrow' + (v.paid ? ' paid' : '');
+      row.innerHTML =
+        '<div class="name"><b></b><span></span></div>' +
+        '<div><input type="text" inputmode="decimal" autocomplete="off" aria-label="Sumă pentru ' + escapeHtml(item.name) + '"></div>' +
+        '<div class="paidwrap"><input type="checkbox" aria-label="Achitat"></div>' +
+        '<button class="del" type="button" aria-label="Șterge ' + escapeHtml(item.name) + '">✕</button>';
+      row.querySelector('.name b').textContent = item.name;
+      row.querySelector('.name span').textContent = GROUP_LABEL[item.group] || '';
+      var amountInput = row.querySelector('input[type="text"]');
+      amountInput.value = v.amount ? String(v.amount).replace('.', ',') : '';
+      var paidInput = row.querySelector('input[type="checkbox"]');
+      paidInput.checked = v.paid;
+
+      amountInput.addEventListener('input', function () {
+        var mm = getMonth(viewKey);
+        var val = parseNum(amountInput.value);
+        if (!mm.bills[item.id]) mm.bills[item.id] = {};
+        mm.bills[item.id].amount = val;
+        save(); updateBillsSummary();
+      });
+      paidInput.addEventListener('change', function () {
+        var mm = getMonth(viewKey);
+        if (!mm.bills[item.id]) mm.bills[item.id] = {};
+        mm.bills[item.id].paid = paidInput.checked;
+        row.classList.toggle('paid', paidInput.checked);
+        save();
+      });
+      row.querySelector('.del').addEventListener('click', function () {
+        if (!confirm('Ștergi definitiv „' + item.name + '” din lista de cheltuieli recurente? Se șterge din toate lunile.')) return;
+        store.billsTemplate = store.billsTemplate.filter(function (x) { return x.id !== item.id; });
+        Object.keys(store.months).forEach(function (k) { delete store.months[k].bills[item.id]; });
+        save(); buildBills();
+      });
+
+      el.billsList.appendChild(row);
+    });
+    updateBillsSummary();
+  }
+
+  function updateBillsSummary() {
+    var m = getMonth(viewKey);
+    var cur = store.currency;
+    var total = 0;
+    store.billsTemplate.forEach(function (item) { total += billValue(viewKey, item).amount || 0; });
+    el.bIncome.textContent = fmt(m.income || 0) + ' ' + cur;
+    el.bTotal.textContent = fmt(total) + ' ' + cur;
+    el.bLeft.textContent = fmt((m.income || 0) - total) + ' ' + cur;
+  }
+
+  function addBillTemplate() {
+    var name = el.billName.value.trim();
+    if (!name) { el.billName.focus(); return; }
+    var amount = parseNum(el.billAmount.value);
+    store.billsTemplate.push({ id: newId(), name: name, group: el.billGroup.value, amount: amount });
+    el.billName.value = ''; el.billAmount.value = '';
+    save(); buildBills();
+    el.billName.focus();
+  }
+
+  function setTab(tab) {
+    var isDaily = tab === 'daily';
+    el.tabDaily.classList.toggle('active', isDaily);
+    el.tabBills.classList.toggle('active', !isDaily);
+    el.tabDaily.setAttribute('aria-selected', isDaily ? 'true' : 'false');
+    el.tabBills.setAttribute('aria-selected', !isDaily ? 'true' : 'false');
+    el.pageDaily.classList.toggle('hidden', !isDaily);
+    el.pageBills.classList.toggle('hidden', isDaily);
+    el.pageTitle.textContent = isDaily ? 'Buget zilnic' : 'Cheltuieli lunare';
+    if (!isDaily) buildBills();
+  }
+
+  function exportExcel() {
+    if (typeof XLSX === 'undefined') {
+      alert('Exportul nu e disponibil momentan — verifică internetul și încearcă din nou.');
+      return;
+    }
+    var keys = Object.keys(store.months).filter(function (k) {
+      var m = store.months[k];
+      var hasBills = m.bills && Object.keys(m.bills).some(function (id) {
+        var b = m.bills[id];
+        return b && ((typeof b.amount === 'number' && b.amount > 0) || b.paid);
+      });
+      return (m.total && m.total > 0) || (m.spent && Object.keys(m.spent).length) || (m.income && m.income > 0) || hasBills;
+    }).sort();
+    if (!keys.length) {
+      alert('Nu există încă date de exportat.');
+      return;
+    }
+    var wb = XLSX.utils.book_new();
+    var cur = store.currency;
+    var summary = [['Lună', 'Buget total (' + cur + ')', 'Cheltuit (' + cur + ')', 'Rămas (' + cur + ')', 'Venit lunar (' + cur + ')', 'Cheltuieli lunare (' + cur + ')']];
+    var usedNames = {};
+    keys.forEach(function (key) {
+      var mm = computeMonthRows(key);
+      var label = MONTHS[mm.mo - 1] + ' ' + mm.y;
+      var mo = store.months[key] || { income: 0, bills: {} };
+      var billsTotal = 0;
+      store.billsTemplate.forEach(function (item) { billsTotal += billValue(key, item).amount || 0; });
+      summary.push([label, round2(mm.total), round2(mm.spentSum), round2(mm.total - mm.spentSum), round2(mo.income || 0), round2(billsTotal)]);
+    });
+    var wsSummary = XLSX.utils.aoa_to_sheet(summary);
+    wsSummary['!cols'] = [{ wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 18 }];
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Rezumat');
+
+    if (store.billsTemplate.length) {
+      var billsAoa = [['Lună'].concat(store.billsTemplate.map(function (it) { return it.name + ' (' + GROUP_LABEL[it.group] + ')'; })).concat(['Venit lunar', 'Total cheltuieli'])];
+      keys.forEach(function (key) {
+        var parts = key.split('-').map(Number);
+        var label = MONTHS[parts[1] - 1] + ' ' + parts[0];
+        var mo = store.months[key] || { income: 0, bills: {} };
+        var rowVals = [label];
+        var billsTotal = 0;
+        store.billsTemplate.forEach(function (item) {
+          var v = billValue(key, item).amount || 0;
+          billsTotal += v;
+          rowVals.push(round2(v));
+        });
+        rowVals.push(round2(mo.income || 0), round2(billsTotal));
+        billsAoa.push(rowVals);
+      });
+      var wsBills = XLSX.utils.aoa_to_sheet(billsAoa);
+      wsBills['!cols'] = [{ wch: 16 }].concat(store.billsTemplate.map(function () { return { wch: 16 }; })).concat([{ wch: 14 }, { wch: 16 }]);
+      XLSX.utils.book_append_sheet(wb, wsBills, 'Cheltuieli lunare');
+    }
+
+    keys.forEach(function (key) {
+      var mm = computeMonthRows(key);
+      var label = MONTHS[mm.mo - 1] + ' ' + mm.y;
+      var name = label.slice(0, 31);
+      var n = usedNames[name] || 0;
+      usedNames[name] = n + 1;
+      if (n > 0) name = (label.slice(0, 28) + ' (' + (n + 1) + ')').slice(0, 31);
+      var aoa = [['Zi', 'Ziua', 'Disponibil (' + cur + ')', 'Cheltuit (' + cur + ')', 'Rămas (' + cur + ')']];
+      mm.rows.forEach(function (r) {
+        var wd = WEEKDAYS[new Date(mm.y, mm.mo - 1, r.d).getDay()];
+        aoa.push([r.d, wd, round2(r.avail), round2(r.spent), round2(r.end)]);
+      });
+      var ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols'] = [{ wch: 5 }, { wch: 6 }, { wch: 14 }, { wch: 12 }, { wch: 12 }];
+      XLSX.utils.book_append_sheet(wb, ws, name);
+    });
+
+    var fname = 'buget-zilnic-' + new Date().toISOString().slice(0, 10) + '.xlsx';
+    XLSX.writeFile(wb, fname);
   }
 
   function build() {
@@ -569,9 +890,21 @@
     viewKey = ym(d.getFullYear(), d.getMonth() + 1);
     disarm();
     build();
+    if (!el.pageBills.classList.contains('hidden')) buildBills();
   }
   el.prev.addEventListener('click', function () { shift(-1); });
   el.next.addEventListener('click', function () { shift(1); });
+
+  el.exportXlsx.addEventListener('click', exportExcel);
+  el.tabDaily.addEventListener('click', function () { setTab('daily'); });
+  el.tabBills.addEventListener('click', function () { setTab('bills'); });
+  el.income.addEventListener('input', function () {
+    getMonth(viewKey).income = parseNum(el.income.value);
+    save(); updateBillsSummary();
+  });
+  el.billsFilter.addEventListener('change', buildBills);
+  el.billAdd.addEventListener('click', addBillTemplate);
+  el.billAmount.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addBillTemplate(); } });
 
   var armTimer = null;
   function disarm() {
