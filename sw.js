@@ -1,6 +1,6 @@
 // Service worker: face aplicația să funcționeze și fără internet.
 // Dacă modifici index.html, schimbă numărul versiunii de mai jos (v1 -> v2).
-const CACHE = 'buget-zilnic-v8';
+const CACHE = 'buget-zilnic-v9';
 const CORE = [
   './',
   './index.html',
