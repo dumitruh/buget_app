@@ -265,7 +265,7 @@
     color: var(--muted); cursor: pointer; font-size: 1rem; line-height: 1;
   }
   .incrow .del:hover { border-color: var(--neg); color: var(--neg); }
-  .addincome { grid-template-columns: minmax(0, 1fr) 6rem 6.5rem auto; }
+  .addincome { grid-template-columns: minmax(0, 1fr) 6.5rem auto; }
   @media (max-width: 480px) {
     .incrow { grid-template-columns: minmax(0, 1fr) 5.2rem 2rem; gap: 6px; padding: 8px 10px; }
     .addincome { grid-template-columns: 1fr 1fr; }
@@ -393,7 +393,6 @@
       <div id="incomeList"></div>
       <div class="addbill addincome">
         <input id="incName" type="text" placeholder="Denumire (ex. Salariul soției)" autocomplete="off">
-        <input id="incDay" type="text" placeholder="Ziua (ex. 10)" autocomplete="off">
         <input id="incAmount" type="text" inputmode="decimal" placeholder="Sumă" autocomplete="off">
         <button id="incAdd" type="button">Adaugă +</button>
       </div>
@@ -499,8 +498,8 @@
   if (!Array.isArray(store.incomeTemplate)) {
     // Primă folosire — pornim cu câte un venit pentru fiecare dintre voi, editabile oricând.
     store.incomeTemplate = [
-      { id: 'i_eu', name: 'Salariul meu', day: 'sfârșitul lunii', amount: 0 },
-      { id: 'i_sotie', name: 'Salariul soției', day: 'ziua 10', amount: 0 }
+      { id: 'i_eu', name: 'Salariul meu', amount: 0 },
+      { id: 'i_sotie', name: 'Salariul soției', amount: 0 }
     ];
   }
 
@@ -537,7 +536,7 @@
     rows: $('rows'), reset: $('reset'), footNote: $('footNote'), exportXlsx: $('exportXlsx'),
     billsFilter: $('billsFilter'), bIncome: $('bIncome'), bTotal: $('bTotal'), bLeft: $('bLeft'),
     billsList: $('billsList'), billName: $('billName'), billGroup: $('billGroup'), billAmount: $('billAmount'), billAdd: $('billAdd'),
-    incomeList: $('incomeList'), incName: $('incName'), incDay: $('incDay'), incAmount: $('incAmount'), incAdd: $('incAdd')
+    incomeList: $('incomeList'), incName: $('incName'), incAmount: $('incAmount'), incAdd: $('incAdd')
   };
 
   // ---- Sincronizare: stare și funcții ----
@@ -702,11 +701,10 @@
       var row = document.createElement('div');
       row.className = 'incrow';
       row.innerHTML =
-        '<div class="name"><b></b><span></span></div>' +
+        '<div class="name"><b></b></div>' +
         '<div><input type="text" inputmode="decimal" autocomplete="off" aria-label="Sumă pentru ' + escapeHtml(item.name) + '"></div>' +
         '<button class="del" type="button" aria-label="Șterge ' + escapeHtml(item.name) + '">✕</button>';
       row.querySelector('.name b').textContent = item.name;
-      row.querySelector('.name span').textContent = item.day ? ('încasare: ' + item.day) : '';
       var amountInput = row.querySelector('input[type="text"]');
       amountInput.value = v.amount ? String(v.amount).replace('.', ',') : '';
 
@@ -731,10 +729,9 @@
   function addIncomeTemplate() {
     var name = el.incName.value.trim();
     if (!name) { el.incName.focus(); return; }
-    var day = el.incDay.value.trim();
     var amount = parseNum(el.incAmount.value);
-    store.incomeTemplate.push({ id: newId(), name: name, day: day, amount: amount });
-    el.incName.value = ''; el.incDay.value = ''; el.incAmount.value = '';
+    store.incomeTemplate.push({ id: newId(), name: name, amount: amount });
+    el.incName.value = ''; el.incAmount.value = '';
     save(); buildIncome(); updateBillsSummary();
     el.incName.focus();
   }
