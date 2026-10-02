@@ -1206,12 +1206,13 @@
   });
 
   build();
-  checkAutoExport();
 
   if (SYNC.enabled) {
     ensureSyncStatusEl();
-    initSync();
+    try { initSync(); } catch (e) { setSyncStatus('Eroare la pornirea sincronizării', 'err'); }
   }
+
+  try { checkAutoExport(); } catch (e) { /* nu lăsăm exportul automat să blocheze restul aplicației */ }
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
