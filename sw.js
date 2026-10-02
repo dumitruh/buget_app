@@ -1,6 +1,6 @@
 // Service worker: face aplicația să funcționeze și fără internet.
 // Dacă modifici index.html, schimbă numărul versiunii de mai jos (v1 -> v2).
-const CACHE = 'buget-zilnic-v9';
+const CACHE = 'buget-zilnic-v10';
 const CORE = [
   './',
   './index.html',
@@ -59,6 +59,19 @@ self.addEventListener('fetch', (e) => {
         })
         .catch(() => hit);
       return hit || net;
+    })
+  );
+});
+
+// La apăsarea unei notificări, deschide sau aduce în față aplicația.
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if ('focus' in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow('./');
     })
   );
 });
