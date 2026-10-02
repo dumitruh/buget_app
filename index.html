@@ -389,7 +389,6 @@
 
     <section class="list" aria-label="Surse de venit">
       <h2>Surse de venit</h2>
-      <p class="note">Se adună automat în venitul lunar. Rămân aceleași în fiecare lună — doar suma se poate ajusta pentru luna curentă.</p>
       <div id="incomeList"></div>
       <div class="addbill addincome">
         <input id="incName" type="text" placeholder="Denumire (ex. Salariul soției)" autocomplete="off">
@@ -431,6 +430,7 @@
       <p id="footNote">Datele se salvează în acest browser, pe acest dispozitiv. La prima deschidere din luna nouă, luna încheiată se descarcă automat în Excel și se urcă în Google Drive.</p>
     </div>
     <div style="display:flex; gap:16px; align-items:baseline; flex-wrap:wrap;">
+      <button class="link" id="notifyBtn" type="button">Activează notificările</button>
       <button class="link" id="exportXlsx" type="button">Exportă în Excel</button>
       <button class="link" id="reset" type="button">Șterge cheltuielile din luna asta</button>
     </div>
@@ -533,7 +533,7 @@
     kicker: $('kicker'), amount: $('amount'), detail: $('detail'),
     quick: $('quick'), quickAmount: $('quickAmount'), quickBtn: $('quickBtn'),
     sSpent: $('sSpent'), sLeft: $('sLeft'), sBase: $('sBase'),
-    rows: $('rows'), reset: $('reset'), footNote: $('footNote'), exportXlsx: $('exportXlsx'),
+    rows: $('rows'), reset: $('reset'), footNote: $('footNote'), exportXlsx: $('exportXlsx'), notifyBtn: $('notifyBtn'),
     billsFilter: $('billsFilter'), bIncome: $('bIncome'), bTotal: $('bTotal'), bLeft: $('bLeft'),
     billsList: $('billsList'), billName: $('billName'), billGroup: $('billGroup'), billAmount: $('billAmount'), billAdd: $('billAdd'),
     incomeList: $('incomeList'), incName: $('incName'), incAmount: $('incAmount'), incAdd: $('incAdd')
@@ -579,8 +579,11 @@
       syncAuthed = true;
       var ref = firebase.database().ref('budgets/' + encodeURIComponent(SYNC.room));
       syncRef = ref;
+      var firstSyncEvent = true;
       ref.on('value', function (snap) {
         var remote = snap.val();
+        var isFirst = firstSyncEvent;
+        firstSyncEvent = false;
         if (!remote || typeof remote !== 'object' || !remote.data) {
           // Camera e goală — urcăm ce avem local.
           schedulePush();
@@ -598,6 +601,7 @@
             lastSyncedAt = remote.updatedAt || Date.now();
             build();
             if (!el.pageBills.classList.contains('hidden')) buildBillsPage();
+            if (!isFirst) notifyChange();
           } finally { applyingRemote = false; }
         }
         setSyncStatus('Sincronizat', 'ok');
@@ -608,6 +612,44 @@
     firebase.auth().signInAnonymously().catch(function () {
       setSyncStatus('Conectare eșuată', 'err');
     });
+  }
+
+  // ---- Notificări locale la schimbări făcute de celălalt telefon ----
+  function notifyChange() {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.ready.then(function (reg) {
+      reg.showNotification('Buget zilnic', {
+        body: 'S-au făcut schimbări noi în aplicație.',
+        icon: 'icon-192.png',
+        badge: 'icon-192.png',
+        tag: 'buget-zilnic-update',
+        renotify: true
+      });
+    }).catch(function () {});
+  }
+
+  function updateNotifyBtn() {
+    if (!el.notifyBtn) return;
+    if (typeof Notification === 'undefined') {
+      el.notifyBtn.textContent = 'Notificări indisponibile pe acest telefon';
+      el.notifyBtn.disabled = true;
+      return;
+    }
+    if (Notification.permission === 'granted') {
+      el.notifyBtn.textContent = 'Notificări activate ✓';
+    } else if (Notification.permission === 'denied') {
+      el.notifyBtn.textContent = 'Notificări blocate — activează din setările telefonului';
+    } else {
+      el.notifyBtn.textContent = 'Activează notificările';
+    }
+  }
+
+  function requestNotifyPermission() {
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().then(function () { updateNotifyBtn(); });
+    }
   }
 
   function parseNum(s) {
@@ -1136,6 +1178,8 @@
   el.next.addEventListener('click', function () { shift(1); });
 
   el.exportXlsx.addEventListener('click', exportExcel);
+  el.notifyBtn.addEventListener('click', requestNotifyPermission);
+  updateNotifyBtn();
   el.tabDaily.addEventListener('click', function () { setTab('daily'); });
   el.tabBills.addEventListener('click', function () { setTab('bills'); });
   el.billsFilter.addEventListener('change', buildBills);
