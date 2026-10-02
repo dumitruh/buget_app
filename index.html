@@ -789,8 +789,9 @@
   }
 
   function totalIncome(key) {
-    var m = getMonth(key);
-    var total = m.income || 0;
+    // Notă: câmpul vechi "venit total" (m.income) nu mai e folosit — venitul
+    // se calculează strict din lista "Surse de venit", ca să nu se adune de două ori.
+    var total = 0;
     store.incomeTemplate.forEach(function (item) { total += incomeValue(key, item).amount || 0; });
     return total;
   }
