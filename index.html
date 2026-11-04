@@ -315,13 +315,34 @@
   @media (prefers-reduced-motion: no-preference) {
     .hero .amount { transition: color 0.2s; }
   }
+
+  /* Tabs: 3 taburi încap pe telefon */
+  .tabs { overflow-x: auto; }
+  .tab { white-space: nowrap; }
+
+  /* Lista mâncăruri */
+  .foodrow {
+    display: grid; grid-template-columns: minmax(0, 1fr) 2.2rem;
+    align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line);
+  }
+  .foodrow b { font-weight: 600; overflow-wrap: anywhere; }
+  .foodrow .del {
+    width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface);
+    color: var(--muted); cursor: pointer; font-size: 1rem; line-height: 1;
+  }
+  .foodrow .del:hover { border-color: var(--neg); color: var(--neg); }
+  .addfood { grid-template-columns: minmax(0, 1fr) auto; }
+  @media (max-width: 480px) {
+    .addfood { grid-template-columns: minmax(0, 1fr) auto; }
+    .foodrow { padding: 8px 10px; }
+  }
 </style>
 </head>
 <body>
 <main>
   <header class="top">
     <h1 id="pageTitle">Buget zilnic</h1>
-    <div class="monthnav" role="group" aria-label="Alege luna">
+    <div class="monthnav" id="monthNav" role="group" aria-label="Alege luna">
       <button class="iconbtn" id="prev" aria-label="Luna anterioară">‹</button>
       <button class="label" id="monthLabel" type="button" aria-haspopup="dialog" aria-expanded="false" aria-live="polite"></button>
       <button class="iconbtn" id="next" aria-label="Luna următoare">›</button>
@@ -339,6 +360,7 @@
   <nav class="tabs" role="tablist" aria-label="Secțiuni">
     <button class="tab active" id="tabDaily" role="tab" aria-selected="true" type="button">Buget zilnic</button>
     <button class="tab" id="tabBills" role="tab" aria-selected="false" type="button">Cheltuieli lunare</button>
+    <button class="tab" id="tabFood" role="tab" aria-selected="false" type="button">Lista mâncăruri</button>
   </nav>
 
   <section id="pageDaily">
@@ -425,6 +447,17 @@
     </section>
   </section>
 
+  <section id="pageFood" class="hidden">
+    <section class="list" aria-label="Lista mâncăruri">
+      <h2>Lista mâncăruri</h2>
+      <div id="foodList"></div>
+      <div class="addbill addfood">
+        <input id="foodName" type="text" placeholder="Denumire (ex. Ciorbă de legume)" autocomplete="off">
+        <button id="foodAdd" type="button">Adaugă +</button>
+      </div>
+    </section>
+  </section>
+
   <div class="foot">
     <div class="footleft">
       <p id="footNote">Datele se salvează în acest browser, pe acest dispozitiv. La prima deschidere din luna nouă, luna încheiată se descarcă automat în Excel și se urcă în Google Drive.</p>
@@ -470,7 +503,7 @@
   };
   // ====== sfârșitul zonei de configurare ======
 
-  var store = { currency: 'lei', months: {}, billsTemplate: null, incomeTemplate: null };
+  var store = { currency: 'lei', months: {}, billsTemplate: null, incomeTemplate: null, foodList: null };
   try {
     var raw = localStorage.getItem(KEY);
     if (raw) {
@@ -480,6 +513,7 @@
         if (p.months && typeof p.months === 'object') store.months = p.months;
         if (Array.isArray(p.billsTemplate)) store.billsTemplate = p.billsTemplate;
         if (Array.isArray(p.incomeTemplate)) store.incomeTemplate = p.incomeTemplate;
+        if (Array.isArray(p.foodList)) store.foodList = p.foodList;
       }
     }
   } catch (e) {}
@@ -502,6 +536,8 @@
       { id: 'i_sotie', name: 'Salariul soției', amount: 0 }
     ];
   }
+
+  if (!Array.isArray(store.foodList)) store.foodList = [];
 
   function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} }
   function save() { saveLocal(); schedulePush(); }
@@ -528,7 +564,8 @@
   var el = {
     prev: $('prev'), next: $('next'), monthLabel: $('monthLabel'), pageTitle: $('pageTitle'),
     monthPicker: $('monthPicker'), mpYear: $('mpYear'), mpPrevYear: $('mpPrevYear'), mpNextYear: $('mpNextYear'), mpMonths: $('mpMonths'),
-    tabDaily: $('tabDaily'), tabBills: $('tabBills'), pageDaily: $('pageDaily'), pageBills: $('pageBills'),
+    tabDaily: $('tabDaily'), tabBills: $('tabBills'), tabFood: $('tabFood'), pageDaily: $('pageDaily'), pageBills: $('pageBills'), pageFood: $('pageFood'), monthNav: $('monthNav'),
+    foodList: $('foodList'), foodName: $('foodName'), foodAdd: $('foodAdd'),
     total: $('total'), currency: $('currency'),
     kicker: $('kicker'), amount: $('amount'), detail: $('detail'),
     quick: $('quick'), quickAmount: $('quickAmount'), quickBtn: $('quickBtn'),
@@ -597,10 +634,12 @@
             if (remote.data.months && typeof remote.data.months === 'object') store.months = remote.data.months;
             if (Array.isArray(remote.data.billsTemplate)) store.billsTemplate = remote.data.billsTemplate;
             if (Array.isArray(remote.data.incomeTemplate)) store.incomeTemplate = remote.data.incomeTemplate;
+            if (Array.isArray(remote.data.foodList)) store.foodList = remote.data.foodList;
             saveLocal();
             lastSyncedAt = remote.updatedAt || Date.now();
             build();
             if (!el.pageBills.classList.contains('hidden')) buildBillsPage();
+            if (!el.pageFood.classList.contains('hidden')) buildFood();
             if (!isFirst) notifyChange();
           } finally { applyingRemote = false; }
         }
@@ -858,16 +897,54 @@
     el.billName.focus();
   }
 
+  function buildFood() {
+    el.foodList.innerHTML = '';
+    if (!store.foodList.length) {
+      var empty = document.createElement('p');
+      empty.className = 'billsempty';
+      empty.textContent = 'Lista e goală. Adaugă prima mâncare mai jos.';
+      el.foodList.appendChild(empty);
+    }
+    store.foodList.forEach(function (item) {
+      var row = document.createElement('div');
+      row.className = 'foodrow';
+      row.innerHTML =
+        '<div class="name"><b></b></div>' +
+        '<button class="del" type="button" aria-label="Șterge ' + escapeHtml(item.name) + '">✕</button>';
+      row.querySelector('.name b').textContent = item.name;
+      row.querySelector('.del').addEventListener('click', function () {
+        if (!confirm('Ștergi „' + item.name + '” din lista de mâncăruri?')) return;
+        store.foodList = store.foodList.filter(function (x) { return x.id !== item.id; });
+        save(); buildFood();
+      });
+      el.foodList.appendChild(row);
+    });
+  }
+
+  function addFood() {
+    var name = el.foodName.value.trim();
+    if (!name) { el.foodName.focus(); return; }
+    store.foodList.push({ id: newId(), name: name });
+    el.foodName.value = '';
+    save(); buildFood();
+    el.foodName.focus();
+  }
+
   function setTab(tab) {
-    var isDaily = tab === 'daily';
-    el.tabDaily.classList.toggle('active', isDaily);
-    el.tabBills.classList.toggle('active', !isDaily);
-    el.tabDaily.setAttribute('aria-selected', isDaily ? 'true' : 'false');
-    el.tabBills.setAttribute('aria-selected', !isDaily ? 'true' : 'false');
-    el.pageDaily.classList.toggle('hidden', !isDaily);
-    el.pageBills.classList.toggle('hidden', isDaily);
-    el.pageTitle.textContent = isDaily ? 'Buget zilnic' : 'Cheltuieli lunare';
-    if (!isDaily) buildBillsPage();
+    var tabs = { daily: [el.tabDaily, el.pageDaily, 'Buget zilnic'],
+                 bills: [el.tabBills, el.pageBills, 'Cheltuieli lunare'],
+                 food:  [el.tabFood,  el.pageFood,  'Lista mâncăruri'] };
+    Object.keys(tabs).forEach(function (k) {
+      var on = k === tab;
+      tabs[k][0].classList.toggle('active', on);
+      tabs[k][0].setAttribute('aria-selected', on ? 'true' : 'false');
+      tabs[k][1].classList.toggle('hidden', !on);
+    });
+    el.pageTitle.textContent = tabs[tab][2];
+    // Lista de mâncăruri nu depinde de lună — ascundem selectorul de lună.
+    el.monthNav.classList.toggle('hidden', tab === 'food');
+    if (tab === 'bills') buildBillsPage();
+    if (tab === 'food') buildFood();
   }
 
   function buildBillsPage() {
@@ -1182,6 +1259,9 @@
   updateNotifyBtn();
   el.tabDaily.addEventListener('click', function () { setTab('daily'); });
   el.tabBills.addEventListener('click', function () { setTab('bills'); });
+  el.tabFood.addEventListener('click', function () { setTab('food'); });
+  el.foodAdd.addEventListener('click', addFood);
+  el.foodName.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addFood(); } });
   el.billsFilter.addEventListener('change', buildBills);
   el.billAdd.addEventListener('click', addBillTemplate);
   el.billAmount.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addBillTemplate(); } });
