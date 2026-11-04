@@ -1,6 +1,6 @@
 // Service worker: face aplicația să funcționeze și fără internet.
 // Dacă modifici index.html, schimbă numărul versiunii de mai jos (v1 -> v2).
-const CACHE = 'buget-zilnic-v12';
+const CACHE = 'buget-zilnic-v13';
 const CORE = [
   './',
   './index.html',
@@ -35,7 +35,7 @@ self.addEventListener('fetch', (e) => {
   // Pagina: mai întâi rețeaua (ca să primești actualizările), altfel copia salvată.
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req)
+      fetch(req, { cache: 'no-cache' })
         .then((res) => {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put('./index.html', copy));
