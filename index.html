@@ -324,13 +324,25 @@
   details.food { border-top: 1px solid var(--line); }
   details.food > summary {
     list-style: none; cursor: pointer; display: grid;
-    grid-template-columns: 1.1rem minmax(0, 1fr) auto 2.2rem; align-items: center; gap: 8px;
-    padding: 11px 14px; -webkit-tap-highlight-color: transparent;
+    grid-template-columns: minmax(0, 1fr) auto 34px; align-items: center; gap: 10px;
+    padding: 10px 14px; -webkit-tap-highlight-color: transparent;
   }
   details.food > summary::-webkit-details-marker { display: none; }
-  details.food > summary::before { content: "\25B8"; color: var(--muted); transition: transform 0.15s; }
-  details.food[open] > summary::before { transform: rotate(90deg); }
+  details.food > summary::marker { content: ""; }
   details.food[open] > summary { background: var(--tint); }
+  .chev {
+    width: 34px; height: 34px; border: 1.5px solid var(--line); border-radius: 10px;
+    background: var(--surface); display: grid; place-items: center;
+  }
+  .chev::after {
+    content: ""; width: 9px; height: 9px;
+    border-right: 2.5px solid var(--muted); border-bottom: 2.5px solid var(--muted);
+    transform: translateY(-2px) rotate(45deg); transition: transform 0.15s;
+  }
+  details.food[open] .chev { border-color: var(--accent); }
+  details.food[open] .chev::after { border-color: var(--accent); transform: translateY(2px) rotate(-135deg); }
+  .fdel { display: block; margin-top: 14px; font-size: 0.85rem; color: var(--muted); }
+  .fdel:hover { color: var(--neg); }
   .fname { font-weight: 600; overflow-wrap: anywhere; }
   .fcount { font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .food .del {
@@ -352,7 +364,7 @@
   .ver { display: block; font-size: 0.72rem; color: var(--muted); opacity: 0.8; }
   @media (max-width: 480px) {
     .addfood, .additem { grid-template-columns: minmax(0, 1fr) auto; }
-    details.food > summary { padding: 10px 10px; }
+    details.food > summary { padding: 9px 10px; }
     .fbody { padding: 4px 10px 12px 10px; }
   }
 </style>
@@ -942,22 +954,22 @@
       if (foodOpen[item.id]) det.open = true;
       det.innerHTML =
         '<summary><span class="fname"></span><span class="fcount"></span>' +
-        '<button class="del" type="button">✕</button></summary>' +
+        '<span class="chev" aria-hidden="true"></span></summary>' +
         '<div class="fbody"><div class="fitems"></div>' +
         '<div class="addbill additem"><input type="text" placeholder="Ingredient de cumpărat (ex. morcovi)" autocomplete="off">' +
         '<button type="button">Adaugă +</button></div>' +
-        '<button class="link fclear hidden" type="button">Debifează tot</button></div>';
+        '<button class="link fclear hidden" type="button">Debifează tot</button>' +
+        '<button class="link fdel" type="button">Șterge această mâncare</button></div>';
 
       var nameEl = det.querySelector('.fname');
       var countEl = det.querySelector('.fcount');
-      var delBtn = det.querySelector('summary .del');
+      var delBtn = det.querySelector('.fdel');
       var box = det.querySelector('.fitems');
       var inp = det.querySelector('.additem input');
       var addBtn = det.querySelector('.additem button');
       var clearBtn = det.querySelector('.fclear');
 
       nameEl.textContent = item.name;
-      delBtn.setAttribute('aria-label', 'Șterge ' + item.name);
 
       function renderItems() {
         box.innerHTML = '';
@@ -1007,8 +1019,7 @@
       });
 
       det.addEventListener('toggle', function () { foodOpen[item.id] = det.open; });
-      delBtn.addEventListener('click', function (e) {
-        e.preventDefault(); e.stopPropagation();
+      delBtn.addEventListener('click', function () {
         if (!confirm('Ștergi „' + item.name + '” și ingredientele ei din listă?')) return;
         store.foodList = store.foodList.filter(function (x) { return x.id !== item.id; });
         delete foodOpen[item.id];
@@ -1025,7 +1036,6 @@
     if (!name) { el.foodName.focus(); return; }
     var id = newId();
     store.foodList.push({ id: id, name: name, items: [] });
-    foodOpen[id] = true;   // se deschide direct, ca să adaugi ingredientele
     el.foodName.value = '';
     save(); buildFood();
     el.foodName.focus();
@@ -1386,7 +1396,7 @@
     save(); disarm(); build();
   });
 
-  var APP_VERSION = 13;
+  var APP_VERSION = 14;
   var verEl = $('appVer');
   if (verEl) verEl.textContent = 'Versiune ' + APP_VERSION;
 
